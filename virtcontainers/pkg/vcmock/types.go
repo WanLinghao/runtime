@@ -8,8 +8,9 @@ package vcmock
 import (
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -60,4 +61,6 @@ type VCMock struct {
 	UpdateContainerFunc      func(sandboxID, containerID string, resources specs.LinuxResources) error
 	PauseContainerFunc       func(sandboxID, containerID string) error
 	ResumeContainerFunc      func(sandboxID, containerID string) error
+
+	AddNetworkFunc func(sandboxID string, inf *grpc.Interface) error
 }

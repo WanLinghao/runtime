@@ -19,7 +19,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -807,6 +807,21 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 
 func (h *hyper) onlineCPUMem(cpus uint32) error {
 	// hyperstart-agent uses udev to online CPUs automatically
+	return nil
+}
+
+func (h *hyper) updateRoutes(routes []netlink.Route) error {
+	// hyperstart-agent does not support update routes
+	return nil
+}
+
+func (h *hyper) addNetwork(sandbox *Sandbox, endpoint Endpoint) error {
+	// hyperstart-agent does not support add network
+	return nil
+}
+
+func (h *hyper) delNetwork(sandbox *Sandbox, endpoint Endpoint) error {
+	// hyperstart-agent does not support delete network
 	return nil
 }
 

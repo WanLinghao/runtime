@@ -8,7 +8,8 @@ package virtcontainers
 import (
 	"syscall"
 
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/vishvananda/netlink"
 )
 
 // noopAgent a.k.a. NO-OP Agent is an empty Agent implementation, for testing and
@@ -83,6 +84,21 @@ func (n *noopAgent) updateContainer(sandbox *Sandbox, c Container, resources spe
 
 // onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.
 func (n *noopAgent) onlineCPUMem(cpus uint32) error {
+	return nil
+}
+
+// updateRoutes is the Noop agent Sandbox update routes implementation. It does nothing.
+func (n *noopAgent) updateRoutes(routes []netlink.Route) error {
+	return nil
+}
+
+// addNetwork is the Noop agent Sandbox add network implementation. It does nothing.
+func (n *noopAgent) addNetwork(sandbox *Sandbox, endpoint Endpoint) error {
+	return nil
+}
+
+// delNetwork is the Noop agent Sandbox del network implementation. It does nothing.
+func (n *noopAgent) delNetwork(sandbox *Sandbox, endpoint Endpoint) error {
 	return nil
 }
 

@@ -19,8 +19,9 @@ import (
 	"fmt"
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -231,4 +232,13 @@ func (m *VCMock) ResumeContainer(sandboxID, containerID string) error {
 	}
 
 	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
+}
+
+// AddNetwork implements the VC function of the same name.
+func (m *VCMock) AddNetwork(sandboxID string, inf *grpc.Interface) error {
+	if m.AddNetworkFunc != nil {
+		return m.AddNetworkFunc(sandboxID, inf)
+	}
+
+	return fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }

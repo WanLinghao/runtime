@@ -741,6 +741,55 @@ func (q *qemu) hotplugVFIODevice(device deviceDrivers.VFIODevice, op operation) 
 	return nil
 }
 
+func (q *qemu) hotplugNetDevice(drive VirtualEndpoint, op operation) error {
+	defer func(qemu *qemu) {
+		if q.qmpMonitorCh.qmp != nil {
+			q.qmpMonitorCh.qmp.Shutdown()
+		}
+	}(q)
+
+	qmp, err := q.qmpSetup()
+	if err != nil {
+		return err
+	}
+
+	q.qmpMonitorCh.qmp = qmp
+
+	devID := "virtio-" + drive.NetPair.ID
+
+	if op == addDevice {
+		if err := q.qmpMonitorCh.qmp.ExecuteNetdevAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, drive.NetPair.TAPIface.Name, "no", "no"); err != nil {
+			return err
+		}
+
+		driver := "virtio-net-pci"
+		addr, bus, err := q.addDeviceToBridge(drive.NetPair.ID)
+		if err != nil {
+			return err
+		}
+
+		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, driver, drive.NetPair.TAPIface.HardAddr, addr, bus.ID, len(drive.NetPair.VMFds)); err != nil {
+			return err
+		}
+	} else {
+		if q.config.BlockDeviceDriver == VirtioBlock {
+			if err := q.removeDeviceFromBridge(drive.NetPair.ID); err != nil {
+				return err
+			}
+		}
+
+		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+			return err
+		}
+
+		if err := q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, drive.NetPair.ID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operation) (interface{}, error) {
 	switch devType {
 	case blockDev:
@@ -754,6 +803,9 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 		// TODO: find a way to remove dependency of deviceDrivers lib @weizhang555
 		device := devInfo.(deviceDrivers.VFIODevice)
 		return nil, q.hotplugVFIODevice(device, op)
+	case netDev:
+		device := devInfo.(VirtualEndpoint)
+		return nil, q.hotplugNetDevice(device, op)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}
@@ -949,7 +1001,7 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineT
 				Bus:  bus,
 				ID:   b.ID,
 				// Each bridge is required to be assigned a unique chassis id > 0
-				Chassis: (idx + 1),
+				Chassis: idx + 1,
 				SHPC:    true,
 				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
 			},

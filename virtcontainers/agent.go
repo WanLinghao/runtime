@@ -10,7 +10,8 @@ import (
 	"syscall"
 
 	"github.com/mitchellh/mapstructure"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/vishvananda/netlink"
 )
 
 // AgentType describes the type of guest agent a Sandbox should run.
@@ -203,4 +204,13 @@ type agent interface {
 
 	// resumeContainer will resume a paused container
 	resumeContainer(sandbox *Sandbox, c Container) error
+
+	// updateRoutes will tell the agent to update route table for an existed Sandbox.
+	updateRoutes(routes []netlink.Route) error
+
+	// addNetwork will tell the agent to add a new nic for an existed Sandbox.
+	addNetwork(sandbox *Sandbox, endpoint Endpoint) error
+
+	// delNetwork will tell the agent to del a new nic for an existed Sandbox.
+	delNetwork(sandbox *Sandbox, endpoint Endpoint) error
 }

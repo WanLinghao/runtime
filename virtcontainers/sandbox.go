@@ -14,13 +14,17 @@ import (
 	"sync"
 	"syscall"
 
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 )
 
 // controlSocket is the sandbox control socket.
@@ -923,6 +927,156 @@ func (s *Sandbox) removeNetwork() error {
 	}
 
 	return nil
+}
+
+// AddNetwork adds new nic to the sandbox.
+func (s *Sandbox) AddNetwork(inf *grpc.Interface) error {
+	networkNS := s.networkNS
+
+	netInfo := NetworkInfo{
+		Iface: NetlinkIface{
+			LinkAttrs: netlink.LinkAttrs{
+				Name:         inf.Name,
+				HardwareAddr: []byte(inf.HwAddr),
+				MTU:          int(inf.Mtu),
+			},
+			Type: "",
+		},
+	}
+
+	var endpoint Endpoint
+	if err := doNetNS(networkNS.NetNsPath, func(_ ns.NetNS) error {
+		// TODO: This is the incoming interface
+		// based on the incoming interface we should create
+		// an appropriate EndPoint based on interface type
+		// This should be a switch
+
+		// Check if interface is a physical interface. Do not create
+		// tap interface/bridge if it is.
+		isPhysical, err := isPhysicalIface(netInfo.Iface.Name)
+		if err != nil {
+			return err
+		}
+
+		if isPhysical {
+			cnmLogger().WithField("interface", netInfo.Iface.Name).Info("Physical network interface found")
+			endpoint, err = createPhysicalEndpoint(netInfo)
+		} else {
+			var socketPath string
+
+			// Check if this is a dummy interface which has a vhost-user socket associated with it
+			socketPath, err = vhostUserSocketPath(netInfo)
+			if err != nil {
+				return err
+			}
+
+			if socketPath != "" {
+				cnmLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
+				endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
+			} else {
+				endpoint, err = createVirtualNetworkEndpoint(len(networkNS.Endpoints), netInfo.Iface.Name, NetXConnectMacVtapModel)
+			}
+		}
+
+		return err
+	}); err != nil {
+		return err
+	}
+
+	endpoint.SetProperties(netInfo)
+	if err := endpoint.HotAttach(s.hypervisor); err != nil {
+		return err
+	}
+
+	// Update the sandbox storage
+	networkNS.Endpoints = append(networkNS.Endpoints, endpoint)
+	if err := s.storage.storeSandboxNetwork(s.id, networkNS); err != nil {
+		return err
+	}
+
+	// Add network for vm
+	if err := s.agent.addNetwork(s, endpoint); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ListNetwork lists all nics and their configurations in the sandbox.
+func (s *Sandbox) ListNetwork() []Endpoint {
+	return s.networkNS.Endpoints
+}
+
+// UpdateNetwork updates the configuration of an existing network interface.
+func (s *Sandbox) UpdateNetwork(ifName string) error {
+	networkNS := s.networkNS
+	netnsHandle, err := netns.GetFromPath(networkNS.NetNsPath)
+	if err != nil {
+		return err
+	}
+	defer netnsHandle.Close()
+
+	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
+	if err != nil {
+		return err
+	}
+	defer netlinkHandle.Delete()
+
+	link, err := netlinkHandle.LinkByName(ifName)
+	if err != nil {
+		return err
+	}
+
+	netInfo, err := networkInfoFromLink(netlinkHandle, link)
+	if err != nil {
+		return err
+	}
+
+	for _, endpoint := range networkNS.Endpoints {
+		if ifName == endpoint.Name() {
+			endpoint.SetProperties(netInfo)
+			// Update the sandbox storage
+			if err := s.storage.storeSandboxNetwork(s.id, networkNS); err != nil {
+				return err
+			}
+
+			// Add network for vm
+			if err := s.agent.addNetwork(s, endpoint); err != nil {
+				return err
+			}
+		}
+	}
+	return fmt.Errorf("update failed:interface %s not found", ifName)
+}
+
+//UpdateRoute updates the sandbox route table (e.g. for portmapping support).
+func (s *Sandbox) UpdateRoute(routes []netlink.Route) error {
+	if err := s.agent.updateRoutes(routes); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteNetwork deletes an existing network interface.
+func (s *Sandbox) DeleteNetwork(ifName string) error {
+	networkNS := s.networkNS
+	for i, endpoint := range networkNS.Endpoints {
+		if ifName == endpoint.Name() {
+			if err := endpoint.HotDetach(s.hypervisor); err != nil {
+				return err
+			}
+			networkNS.Endpoints = append(networkNS.Endpoints[:i], networkNS.Endpoints[i+1:]...)
+			if err := s.storage.storeSandboxNetwork(s.id, networkNS); err != nil {
+				return err
+			}
+			// Hot pull network for vm
+			if err := s.agent.hotPullNetwork(s, endpoint); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("delete failed:interface %s not found", ifName)
 }
 
 // startVM starts the VM.

@@ -18,7 +18,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -107,11 +107,13 @@ var runtimeCommands = []cli.Command{
 	createCLICommand,
 	deleteCLICommand,
 	execCLICommand,
+	interfaceCLICommand,
 	killCLICommand,
 	listCLICommand,
 	pauseCLICommand,
 	psCLICommand,
 	resumeCLICommand,
+	routeCLICommand,
 	runCLICommand,
 	specCLICommand,
 	startCLICommand,

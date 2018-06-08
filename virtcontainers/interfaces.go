@@ -9,8 +9,10 @@ import (
 	"io"
 	"syscall"
 
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 // VC is the Virtcontainers interface
@@ -40,6 +42,8 @@ type VC interface {
 	UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error
 	PauseContainer(sandboxID, containerID string) error
 	ResumeContainer(sandboxID, containerID string) error
+
+	AddNetwork(sandboxID string, inf *grpc.Interface) error
 }
 
 // VCSandbox is the Sandbox interface
@@ -69,6 +73,10 @@ type VCSandbox interface {
 	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcess(containerID, processID string, height, width uint32) error
 	IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
+	AddNetwork(ifName string) error
+	ListNetwork() []Endpoint
+	UpdateNetwork(ifName string) error
+	UpdateRoute(routes []netlink.Route) error
 }
 
 // VCContainer is the Container interface

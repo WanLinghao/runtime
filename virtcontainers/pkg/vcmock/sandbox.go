@@ -10,7 +10,8 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/vishvananda/netlink"
 )
 
 // ID implements the VCSandbox function of the same name.
@@ -137,4 +138,24 @@ func (s *Sandbox) WinsizeProcess(containerID, processID string, height, width ui
 // IOStream implements the VCSandbox function of the same name.
 func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
 	return nil, nil, nil, nil
+}
+
+// AddNetwork implements the VCSandbox function of the same name.
+func (s *Sandbox) AddNetwork(ifName string) error {
+	return nil
+}
+
+// ListNetwork implements the VCSandbox function of the same name.
+func (s *Sandbox) ListNetwork() []vc.Endpoint {
+	return nil
+}
+
+// UpdateNetwork implements the VCSandbox function of the same name.
+func (s *Sandbox) UpdateNetwork(ifName string) error {
+	return nil
+}
+
+// UpdateRoute implements the VCSandbox function of the same name.
+func (s *Sandbox) UpdateRoute(routes []netlink.Route) error {
+	return nil
 }

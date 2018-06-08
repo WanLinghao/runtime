@@ -12,7 +12,8 @@ package virtcontainers
 import (
 	"syscall"
 
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -134,4 +135,9 @@ func (impl *VCImpl) PauseContainer(sandboxID, containerID string) error {
 // ResumeContainer implements the VC function of the same name.
 func (impl *VCImpl) ResumeContainer(sandboxID, containerID string) error {
 	return ResumeContainer(sandboxID, containerID)
+}
+
+// AddNetwork implements the VC function of the same name.
+func (impl *VCImpl) AddNetwork(sandboxID string, inf *grpc.Interface) error {
+	return AddNetwork(sandboxID, inf)
 }

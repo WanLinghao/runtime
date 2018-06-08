@@ -10,8 +10,9 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -695,4 +696,24 @@ func PauseContainer(sandboxID, containerID string) error {
 // ResumeContainer is the virtcontainers container resume entry point.
 func ResumeContainer(sandboxID, containerID string) error {
 	return togglePauseContainer(sandboxID, containerID, false)
+}
+
+// AddNetwork is the virtcontainers entry point to add a new nic.
+func AddNetwork(sandboxID string, inf *grpc.Interface) error {
+	if sandboxID == "" {
+		return errNeedSandboxID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return err
+	}
+
+	return s.AddNetwork(inf)
 }

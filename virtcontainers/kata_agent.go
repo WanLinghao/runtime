@@ -377,6 +377,21 @@ func (k *kataAgent) generateRoutes(endpoint Endpoint) []netlink.Route {
 	return endpoint.Properties().Routes
 }
 
+func (k *kataAgent) generateRoutesWithExcept(networkNS NetworkNamespace, except string) ([]netlink.Route, error) {
+	if networkNS.NetNsPath == "" {
+		return nil, nil
+	}
+
+	var routes []netlink.Route
+
+	for _, endpoint := range networkNS.Endpoints {
+		if endpoint.Name() != except {
+			routes = append(routes, k.generateRoutes(endpoint)...)
+		}
+	}
+	return routes, nil
+}
+
 func (k *kataAgent) addInterfaces(interfaces []*grpc.Interface) error {
 	for _, ifc := range interfaces {
 		// send update interface request
@@ -1059,6 +1074,63 @@ func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerSta
 	return containerStats, nil
 }
 
+func (k *kataAgent) addNetwork(sandbox *Sandbox, endpoint Endpoint) error {
+	if endpoint == nil {
+		return fmt.Errorf("endpoint can not be nil")
+	}
+
+	interfaces := []*grpc.Interface{k.generateInterface(endpoint)}
+	routes, err := k.generateRoutesWithExcept(sandbox.networkNS, endpoint.Name())
+	if err != nil {
+		return err
+	}
+	routes = append(routes, k.generateRoutes(endpoint)...)
+	if err := k.addInterfaces(interfaces); err != nil {
+		return err
+	}
+	if err := k.updateRoutes(routes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *kataAgent) delNetwork(sandbox *Sandbox, endpoint Endpoint) error {
+	if endpoint == nil {
+		return fmt.Errorf("endpoint can not be nil")
+	}
+
+	interfaces := []*grpc.Interface{k.generateInterface(endpoint)}
+	routes, err := k.generateRoutesWithExcept(sandbox.networkNS, endpoint.Name())
+	if err != nil {
+		return err
+	}
+	if err := k.delInterfaces(interfaces); err != nil {
+		return err
+	}
+	if err := k.updateRoutes(routes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *kataAgent) delInterfaces(interfaces []*grpc.Interface) error {
+	for _, ifc := range interfaces {
+		// send remove interface request
+		ifcReq := &grpc.RemoveInterfaceRequest{
+			Interface: ifc,
+		}
+		resultingInterface, err := k.sendReq(ifcReq)
+		if err != nil {
+			k.Logger().WithFields(logrus.Fields{
+				"interface-requested": fmt.Sprintf("%+v", ifc),
+				"resulting-interface": fmt.Sprintf("%+v", resultingInterface),
+			}).WithError(err).Error("remove interface request failed")
+			return err
+		}
+	}
+	return nil
+}
+
 func (k *kataAgent) connect() error {
 	if k.client != nil {
 		return nil
@@ -1165,6 +1237,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.UpdateInterfaceRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest), opts...)
+	}
+	k.reqHandlers["grpc.RemoveInterfaceRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.RemoveInterface(ctx, req.(*grpc.RemoveInterfaceRequest), opts...)
 	}
 	k.reqHandlers["grpc.OnlineCPUMemRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest), opts...)

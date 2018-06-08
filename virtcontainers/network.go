@@ -154,6 +154,8 @@ type Endpoint interface {
 	SetProperties(NetworkInfo)
 	Attach(hypervisor) error
 	Detach() error
+	HotAttach(hypervisor) error
+	HotDetach(hypervisor) error
 }
 
 // VirtualEndpoint gathers a network pair and its properties.
@@ -235,6 +237,36 @@ func (endpoint *VirtualEndpoint) Detach() error {
 	return xconnectVMNetwork(&(endpoint.NetPair), false)
 }
 
+// HotAttach for the virtual endpoint uses hot plug device
+func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
+	networkLogger().Info("Hot attaching virtual endpoint")
+	if err := xconnectVMNetwork(&(endpoint.NetPair), true); err != nil {
+		networkLogger().WithError(err).Error("Error bridging virtual ep")
+		return err
+	}
+
+	if _, err := h.hotplugAddDevice(*endpoint, netDev); err != nil {
+		networkLogger().WithError(err).Error("Error attach virtual ep")
+		return err
+	}
+	return nil
+}
+
+// HotDetach for the virtual endpoint uses hot pull device
+func (endpoint *VirtualEndpoint) HotDetach(h hypervisor) error {
+	networkLogger().Info("Hot detaching virtual endpoint")
+	if err := xconnectVMNetwork(&(endpoint.NetPair), false); err != nil {
+		networkLogger().WithError(err).Error("Error abridging virtual ep")
+		return err
+	}
+
+	if _, err := h.hotplugRemoveDevice(endpoint, netDev); err != nil {
+		networkLogger().WithError(err).Error("Error detach virtual ep")
+		return err
+	}
+	return nil
+}
+
 // Properties returns the properties of the interface.
 func (endpoint *VhostUserEndpoint) Properties() NetworkInfo {
 	return endpoint.EndpointProperties
@@ -284,6 +316,16 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 func (endpoint *VhostUserEndpoint) Detach() error {
 	networkLogger().Info("Detaching vhostuser based endpoint")
 	return nil
+}
+
+// HotAttach for vhostuser endpoint not supported yet
+func (endpoint *VhostUserEndpoint) HotAttach(h hypervisor) error {
+	return fmt.Errorf("VhostUserEndpoint don't support Hot attach")
+}
+
+// HotDetach for vhostuser endpoint not supported yet
+func (endpoint *VhostUserEndpoint) HotDetach(h hypervisor) error {
+	return fmt.Errorf("VhostUserEndpoint don't support Hot detach")
 }
 
 // Create a vhostuser endpoint
@@ -347,6 +389,16 @@ func (endpoint *PhysicalEndpoint) Detach() error {
 	// Bind back the physical network interface to host.
 	networkLogger().Info("Detaching physical endpoint")
 	return bindNICToHost(endpoint)
+}
+
+// HotAttach for physical endpoint not supported yet
+func (endpoint *PhysicalEndpoint) HotAttach(h hypervisor) error {
+	return fmt.Errorf("PhysicalEndpoint don't support Hot attach")
+}
+
+// HotDetach for physical endpoint not supported yet
+func (endpoint *PhysicalEndpoint) HotDetach(h hypervisor) error {
+	return fmt.Errorf("PhysicalEndpoint don't support Hot detach")
 }
 
 // EndpointType identifies the type of the network endpoint.
